@@ -6,6 +6,7 @@ from matplotlib.collections import PatchCollection
 from numpy import array, max
 import csv
 import operator
+import os
 
 
 def add_commas(float_in):
@@ -87,11 +88,15 @@ def plot_map(sf_records, values, colors, headings, prefix, name, extension):
     plt.title(name + " (R" + title_str + ")")
 
     # TODO: add color bar
+    if not os.path.exists("plots/" + extension):
+        os.makedirs("plots/" + extension)
     filename = prefix + "-" + name.replace(" ", "_")
-    fig.savefig("plots/" + filename + "." + extension)
+    fig.savefig("plots/" + extension + "/" + filename + "." + extension)
     plt.close()
 
-    f = open("plots/legend_" + filename + ".txt", "w")
+    if not os.path.exists("plots/legend"):
+        os.makedirs("plots/legend")
+    f = open("plots/legend/" + filename + ".txt", "w")
     heading_str = ""
     for heading in headings:
         heading_str += "\t" + heading
@@ -209,6 +214,9 @@ def generate_plot(sf_records, sf_index, values, headings, colormap, bias, prefix
 
 if __name__ == "__main__":
 
+    if not os.path.exists("plots"):
+        os.makedirs("plots")
+
     # Read input data, specifying the index column, which is used for matching to the shapefile,
     # as well as the target column with the values to be plotted. Further columns can optionally
     # be specified for breaking down the data set into categories.
@@ -238,18 +246,19 @@ if __name__ == "__main__":
         'Reds',
     ]
 
-    # Plot summary map.
-    tmp_head = [headings[0], headings[-1]]
-    generate_plot(sf_records, sf_index, values_overall, tmp_head, colormaps[1], 0.0, '0', 'Total', 'png')
+    for extension in ['png', 'svg']:
+        # Plot summary map.
+        tmp_head = [headings[0], headings[-1]]
+        generate_plot(sf_records, sf_index, values_overall, tmp_head, colormaps[1], 0.0, '0', 'Total', extension)
 
-    # Plot breakdown maps.
-    for i in range(len(breakdown)):
-        data_set_list = breakdown[i]
-        num_digits = len(str(len(data_set_list)))  # used in prefixes for file names
-        for j in range(len(data_set_list)):
-            category_name, tmp_subtotal, tmp_values = data_set_list[j]
-            print tmp_values
-            tmp = "{0:0" + str(num_digits) + "d}"
-            prefix = tmp.format(j+1)
-            prefix = str(i+1) + prefix
-            generate_plot(sf_records, sf_index, tmp_values, tmp_head, colormaps[1], 0.0, prefix, category_name, 'png')
+        # Plot breakdown maps.
+        for i in range(len(breakdown)):
+            data_set_list = breakdown[i]
+            num_digits = len(str(len(data_set_list)))  # used in prefixes for file names
+            for j in range(len(data_set_list)):
+                category_name, tmp_subtotal, tmp_values = data_set_list[j]
+                print tmp_values
+                tmp = "{0:0" + str(num_digits) + "d}"
+                prefix = tmp.format(j+1)
+                prefix = str(i+1) + prefix
+                generate_plot(sf_records, sf_index, tmp_values, tmp_head, colormaps[1], 0.0, prefix, category_name, extension)
