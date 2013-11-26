@@ -64,42 +64,43 @@ def map_colors(sf_records, sf_index, values, colormap="Blues", bias=0.0, debug=F
     return colors, total_mapped
 
 
-def plot_map(sf_records, values, colors, headings, prefix, name, extension):
+def plot_map(sf_records, values, colors, headings, prefix, name, plot_options):
 
     sorted_values = sorted(values.iteritems(), key=operator.itemgetter(1))
     sorted_values.reverse()
-
-    fig = plt.figure(figsize=(8, 8.5), dpi=100)
-    ax = fig.add_subplot(1, 1, 1)
-    for i in range(len(sf_records)):
-        patches = []
-        points = array(sf_records[i].shape.points)
-        parts = sf_records[i].shape.parts
-        par = list(parts) + [points.shape[0]]
-        for pij in range(len(parts)):
-            patches.append(Polygon(points[par[pij]:par[pij+1]]))
-        ax.add_collection(PatchCollection(patches, facecolor=colors[i, :], edgecolor='k', linewidths=.2))
-
-    ax.set_xlim(18.1, 19.15)
-    ax.set_ylim(-34.45, -33.40)
-    ax.set_aspect(1.0)
-
-    ax.get_xaxis().set_visible(False)
-    ax.get_yaxis().set_visible(False)
 
     total = 0.0
     for index, amount in sorted_values:
         total += amount
     title_str = add_commas(total)
 
-    plt.title(name + " (R" + title_str + ")")
+    for extension in plot_options['formats']:
+        fig = plt.figure(figsize=(plot_options['width_inches'], plot_options['height_inches']), dpi=plot_options['dpi'])
+        ax = fig.add_subplot(1, 1, 1)
+        for i in range(len(sf_records)):
+            patches = []
+            points = array(sf_records[i].shape.points)
+            parts = sf_records[i].shape.parts
+            par = list(parts) + [points.shape[0]]
+            for pij in range(len(parts)):
+                patches.append(Polygon(points[par[pij]:par[pij+1]]))
+            ax.add_collection(PatchCollection(patches, facecolor=colors[i, :], edgecolor='k', linewidths=plot_options['line_width']))
 
-    # TODO: add color bar
-    if not os.path.exists("plots/" + extension):
-        os.makedirs("plots/" + extension)
-    filename = prefix + "-" + name.replace(" ", "_")
-    fig.savefig("plots/" + extension + "/" + filename + "." + extension)
-    plt.close()
+        ax.set_xlim(18.1, 19.15)
+        ax.set_ylim(-34.45, -33.40)
+        ax.set_aspect(1.0)
+
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        plt.title(name + " (R" + title_str + ")")
+
+        # TODO: add color bar
+        if not os.path.exists("plots/" + extension):
+            os.makedirs("plots/" + extension)
+        filename = prefix + "-" + name.replace(" ", "_")
+        fig.savefig("plots/" + extension + "/" + filename + "." + extension)
+        plt.close()
 
     if not os.path.exists("plots/legend"):
         os.makedirs("plots/legend")
@@ -114,10 +115,13 @@ def plot_map(sf_records, values, colors, headings, prefix, name, extension):
     f.close()
 
 
-def read_input(filename, index_column, category_columns, target_column, delimeter='\t'):
+def read_input(filename, data_columns, delimeter='\t'):
     """
     Read an input textfile and categorize the content. The first line is assumed to be column headings.
     """
+
+    index_column, category_columns, target_column = \
+        data_columns['index'], data_columns['categories'], data_columns['target']
 
     data_in = list(csv.reader(open(filename, 'rU'), delimiter=delimeter))
     headings_in = data_in[0]
@@ -204,26 +208,25 @@ def read_shape_file(path):
     print sf.fields
     for i in range(len(sf.fields)):
         if not i == 0:
-            print str(i) + "\t" + sf.fields[i][0] + ", e.g. " + str(records[0].record[i - 1])
+            print str(i-1) + "\t" + sf.fields[i][0] + ", e.g. " + str(records[0].record[i - 1])
     return records
 
 
-def generate_plot(sf_records, sf_index, values, headings, colormap, bias, prefix, filename, extension):
+def generate_plot(sf_records, sf_index, values, headings, plot_options, prefix, filename):
 
     try:
         # map data to colors
-        colors, total_mapped = map_colors(sf_records, sf_index, values, colormap, bias)
+        colors, total_mapped = map_colors(sf_records, sf_index, values, plot_options['colormap'], plot_options['bias'])
 
         # plot colors and shape records
-        plot_map(sf_records, values, colors, headings, prefix, filename, extension)
+        plot_map(sf_records, values, colors, headings, prefix, filename, plot_options)
     except ValueError as e:
         print e
         pass
-
     return
 
 
-if __name__ == "__main__":
+def generate_plot_set(data_file, data_columns, shape_file, shape_file_index, plot_options):
 
     if not os.path.exists("plots"):
         os.makedirs("plots")
@@ -232,35 +235,22 @@ if __name__ == "__main__":
     # as well as the target column with the values to be plotted. Further columns can optionally
     # be specified for breaking down the data set into categories.
 
-    categories = [1, 3]  # directorate and department columns
-    headings, data = read_input('city_budget.txt', -2, categories, -4)
+    headings, data = read_input(data_file, data_columns)
 
     # Process input data, grouping it by some target column, and optionally categorizing it by another.
     total_overall, values_overall, breakdown = assemble_plot_data(data)
     print "Overall total: " + add_commas(total_overall)
 
     # Read shapefile
-    sf_records = read_shape_file("./shapefiles_cape_town/wards.shp")
-    sf_index = 3  # the column that is used for joining to the input data set
-
-    print sf_records[55].record
-    print sf_records[0].record[sf_index]
+    sf_records = read_shape_file(shape_file)
+    sf_index = shape_file_index  # the column that is used for joining to the input data set
 
     # Project values onto a color map.
-    # For all available colormaps, see http://matplotlib.org/examples/color/colormaps_reference.html
-    colormaps = [
-        'binary',
-        'Blues',
-        'Greens',
-        'Oranges',
-        'OrRd',
-        'Reds',
-    ]
 
-    for extension in ['png', ]:#'svg']:
+    for extension in plot_options['formats']:
         # Plot summary map.
         tmp_head = [headings[0], headings[-1]]
-        generate_plot(sf_records, sf_index, values_overall, tmp_head, colormaps[1], 0.25, '0', 'Total', extension)
+        generate_plot(sf_records, sf_index, values_overall, tmp_head, plot_options, '0', 'Total')
 
         # Plot breakdown maps.
         for i in range(len(breakdown)):
@@ -272,4 +262,41 @@ if __name__ == "__main__":
                 tmp = "{0:0" + str(num_digits) + "d}"
                 prefix = tmp.format(j+1)
                 prefix = str(i+1) + prefix
-                generate_plot(sf_records, sf_index, tmp_values, tmp_head, colormaps[1], 0.25, prefix, category_name, extension)
+                generate_plot(sf_records, sf_index, tmp_values, tmp_head, plot_options, prefix, category_name)
+    return
+
+
+if __name__ == "__main__":
+
+    data_file = 'city_budget.txt'
+
+    data_columns = {}
+    data_columns['index'] = -2
+    data_columns['categories'] = [1, 3]
+    data_columns['target'] = -4
+
+    shape_file = "shapefiles_cape_town/wards.shp"
+    shape_file_index = 3
+    extensions = ['png', 'svg']
+
+    # For all available colormaps, see http://matplotlib.org/examples/color/colormaps_reference.html
+    colormaps = [
+        'binary',
+        'Blues',
+        'Greens',
+        'Oranges',
+        'OrRd',
+        'Reds',
+    ]
+
+    plot_options = {
+        'colormap': colormaps[1],
+        'formats': ['png', 'svg'],
+        'bias': 0.2,
+        'line_width': 0.2,
+        'width_inches': 8,
+        'height_inches': 8.5,
+        'dpi': 100,
+    }
+
+    generate_plot_set(data_file, data_columns, shape_file, shape_file_index, plot_options)
