@@ -28,6 +28,7 @@ def map_colors(sf_records, sf_index, values, colormap="Blues", bias=0.0, debug=F
 
     colormap = plt.get_cmap(colormap)
     color_list = []
+    entry_count = 0
 
     for record in sf_records:
         rec_index = str(record.record[sf_index])
@@ -36,10 +37,16 @@ def map_colors(sf_records, sf_index, values, colormap="Blues", bias=0.0, debug=F
             if debug:
                 print rec_index + "\t" + add_commas(amount)
             color_list.append(amount)
+            entry_count += 1
         except KeyError:
             if debug:
                 print rec_index + "\t0"
             color_list.append(0.0)
+            pass
+
+    if entry_count == 0:
+        raise ValueError, "Warning: Nothing to plot. \n\
+        No entry in the input data matched a shape file record. Skipping this data set."
 
     color_arr = array(color_list)
     total_mapped = sum(color_arr)
@@ -203,11 +210,15 @@ def read_shape_file(path):
 
 def generate_plot(sf_records, sf_index, values, headings, colormap, bias, prefix, filename, extension):
 
-    # map data to colors
-    colors, total_mapped = map_colors(sf_records, sf_index, values, colormap, bias)
+    try:
+        # map data to colors
+        colors, total_mapped = map_colors(sf_records, sf_index, values, colormap, bias)
 
-    # plot colors and shape records
-    plot_map(sf_records, values, colors, headings, prefix, filename, extension)
+        # plot colors and shape records
+        plot_map(sf_records, values, colors, headings, prefix, filename, extension)
+    except ValueError as e:
+        print e
+        pass
 
     return
 
@@ -246,10 +257,10 @@ if __name__ == "__main__":
         'Reds',
     ]
 
-    for extension in ['png', 'svg']:
+    for extension in ['png', ]:#'svg']:
         # Plot summary map.
         tmp_head = [headings[0], headings[-1]]
-        generate_plot(sf_records, sf_index, values_overall, tmp_head, colormaps[1], 0.0, '0', 'Total', extension)
+        generate_plot(sf_records, sf_index, values_overall, tmp_head, colormaps[1], 0.25, '0', 'Total', extension)
 
         # Plot breakdown maps.
         for i in range(len(breakdown)):
@@ -261,4 +272,4 @@ if __name__ == "__main__":
                 tmp = "{0:0" + str(num_digits) + "d}"
                 prefix = tmp.format(j+1)
                 prefix = str(i+1) + prefix
-                generate_plot(sf_records, sf_index, tmp_values, tmp_head, colormaps[1], 0.0, prefix, category_name, extension)
+                generate_plot(sf_records, sf_index, tmp_values, tmp_head, colormaps[1], 0.25, prefix, category_name, extension)
