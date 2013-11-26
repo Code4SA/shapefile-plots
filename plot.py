@@ -10,6 +10,9 @@ import os
 
 
 def add_commas(float_in):
+    """
+    Convert float number to string, adding a comma after every 3 digits.
+    """
 
     tmp = str(int(float_in))
     str_out = ""
@@ -20,12 +23,14 @@ def add_commas(float_in):
             str_out = tmp[-3::]
         tmp = tmp[0:-3]
     str_out = tmp + "," + str_out
-    #print str(total) + " vs " + str_out
     return str_out
 
 
-def map_colors(sf_records, sf_index, values, colormap="Blues", bias=0.0, debug=False):
-
+def map_colors(sf_records, sf_index, values, colormap, bias, debug=False):
+    """
+    Calculate the colours representing the given float values.
+    """
+    
     colormap = plt.get_cmap(colormap)
     color_list = []
     entry_count = 0
@@ -65,6 +70,9 @@ def map_colors(sf_records, sf_index, values, colormap="Blues", bias=0.0, debug=F
 
 
 def plot_map(sf_records, values, colors, headings, prefix, name, plot_options):
+    """
+    Plot one map in for each specified format. Also, save the plotted values to a separate text file to serve as legend.
+    """
 
     sorted_values = sorted(values.iteritems(), key=operator.itemgetter(1))
     sorted_values.reverse()
@@ -86,6 +94,7 @@ def plot_map(sf_records, values, colors, headings, prefix, name, plot_options):
                 patches.append(Polygon(points[par[pij]:par[pij+1]]))
             ax.add_collection(PatchCollection(patches, facecolor=colors[i, :], edgecolor='k', linewidths=plot_options['line_width']))
 
+        # TODO: set plot limits automatically
         ax.set_xlim(18.1, 19.15)
         ax.set_ylim(-34.45, -33.40)
         ax.set_aspect(1.0)
@@ -93,9 +102,9 @@ def plot_map(sf_records, values, colors, headings, prefix, name, plot_options):
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
 
+        # TODO: pass in relevant units
         plt.title(name + " (R" + title_str + ")")
 
-        # TODO: add color bar
         if not os.path.exists("plots/" + extension):
             os.makedirs("plots/" + extension)
         filename = prefix + "-" + name.replace(" ", "_")
@@ -115,15 +124,15 @@ def plot_map(sf_records, values, colors, headings, prefix, name, plot_options):
     f.close()
 
 
-def read_input(filename, data_columns, delimeter='\t'):
+def read_input(filename, data_columns, delimiter='\t'):
     """
-    Read an input textfile and categorize the content. The first line is assumed to be column headings.
+    Read an input text file and categorize the content. The first line is assumed to be column headings.
     """
 
     index_column, category_columns, target_column = \
         data_columns['index'], data_columns['categories'], data_columns['target']
 
-    data_in = list(csv.reader(open(filename, 'rU'), delimiter=delimeter))
+    data_in = list(csv.reader(open(filename, 'rU'), delimiter=delimiter))
     headings_in = data_in[0]
     data_in = data_in[1::]
     headings_out = [headings_in[index_column], ]
@@ -147,6 +156,9 @@ def read_input(filename, data_columns, delimeter='\t'):
 
 
 def categorize(data_list, category_col=None):
+    """
+    Aggregate the given data set over the specified category.
+    """
 
     if not category_col:
         # calculate overall totals for each item in index column
@@ -177,7 +189,7 @@ def categorize(data_list, category_col=None):
 
 def assemble_plot_data(data_list):
     """
-
+    Assemble a collection of data sets ready for plotting.
     """
 
     print "\nExtracting relevant data for plotting."
@@ -213,6 +225,9 @@ def read_shape_file(path):
 
 
 def generate_plot(sf_records, sf_index, values, headings, plot_options, prefix, filename):
+    """
+    Generate a single plot.
+    """
 
     try:
         # map data to colors
@@ -226,7 +241,29 @@ def generate_plot(sf_records, sf_index, values, headings, plot_options, prefix, 
     return
 
 
-def generate_plot_set(data_file, data_columns, shape_file, shape_file_index, plot_options):
+def generate_plot_set(data_file, data_columns, shape_file, shape_file_index, plot_options={}):
+    """
+    Generate a set of plots.
+    """
+    
+    # TODO: handle simpler cases where there is no need for categorization
+    # TODO: implement a DEBUG mode
+
+    # set sensible defaults
+    if not plot_options.get('line_width'):
+        plot_options['line_width'] = 0.1
+    if not plot_options.get('formats'):
+        plot_options['formats'] = ['png',]
+    if not plot_options.get('bias'):
+        plot_options['bias'] = 0.0
+    if not plot_options.get('colormap'):
+        plot_options['colormap'] = 'Greens'
+    if not plot_options.get('width_inches'):
+        plot_options['width_inches'] = 8
+    if not plot_options.get('height_inches'):
+        plot_options['height_inches'] = 8
+    if not plot_options.get('dpi'):
+        plot_options['dpi'] = 150
 
     if not os.path.exists("plots"):
         os.makedirs("plots")
@@ -246,7 +283,6 @@ def generate_plot_set(data_file, data_columns, shape_file, shape_file_index, plo
     sf_index = shape_file_index  # the column that is used for joining to the input data set
 
     # Project values onto a color map.
-
     for extension in plot_options['formats']:
         # Plot summary map.
         tmp_head = [headings[0], headings[-1]]
@@ -269,7 +305,6 @@ def generate_plot_set(data_file, data_columns, shape_file, shape_file_index, plo
 if __name__ == "__main__":
 
     data_file = 'city_budget.txt'
-
     data_columns = {}
     data_columns['index'] = -2
     data_columns['categories'] = [1, 3]
@@ -277,7 +312,6 @@ if __name__ == "__main__":
 
     shape_file = "shapefiles_cape_town/wards.shp"
     shape_file_index = 3
-    extensions = ['png', 'svg']
 
     # For all available colormaps, see http://matplotlib.org/examples/color/colormaps_reference.html
     colormaps = [
