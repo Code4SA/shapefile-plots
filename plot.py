@@ -23,12 +23,12 @@ def add_commas(float_in):
     return str_out
 
 
-def map_colors(records, sf_index, values, colormap="Blues", bias=0.0, debug=False):
+def map_colors(sf_records, sf_index, values, colormap="Blues", bias=0.0, debug=False):
 
     colormap = plt.get_cmap(colormap)
     color_list = []
 
-    for record in records:
+    for record in sf_records:
         rec_index = str(record.record[sf_index])
         try:
             amount = values[rec_index]
@@ -56,14 +56,17 @@ def map_colors(records, sf_index, values, colormap="Blues", bias=0.0, debug=Fals
     return colors, total_mapped
 
 
-def plot_map(records, colors, directory, name, extension, counter, sorted_breakdown):
+def plot_map(sf_records, values, colors, headings, prefix, name, extension):
+
+    sorted_values = sorted(values.iteritems(), key=operator.itemgetter(1))
+    sorted_values.reverse()
 
     fig = plt.figure(figsize=(8, 8.5), dpi=100)
     ax = fig.add_subplot(1, 1, 1)
-    for i in range(len(records)):
+    for i in range(len(sf_records)):
         patches = []
-        points = array(records[i].shape.points)
-        parts = records[i].shape.parts
+        points = array(sf_records[i].shape.points)
+        parts = sf_records[i].shape.parts
         par = list(parts) + [points.shape[0]]
         for pij in range(len(parts)):
             patches.append(Polygon(points[par[pij]:par[pij+1]]))
@@ -77,30 +80,25 @@ def plot_map(records, colors, directory, name, extension, counter, sorted_breakd
     ax.get_yaxis().set_visible(False)
 
     total = 0.0
-    for ward, amount in sorted_breakdown:
+    for index, amount in sorted_values:
         total += amount
     title_str = add_commas(total)
 
     plt.title(name + " (R" + title_str + ")")
 
-    # TODO: add colorbar
-    filename = str(counter) + "-" + name.replace(" ", "_")
-    if name == "Total Capital Spend":
-        fig.savefig(directory + filename + extension)
-    else:
-        if extension == ".png":
-            fig.savefig(directory + "png/" + filename + extension)
-        else:
-            fig.savefig(directory + "svg/" + filename + extension)
+    # TODO: add color bar
+    filename = prefix + "-" + name.replace(" ", "_")
+    fig.savefig("plots/" + filename + "." + extension)
     plt.close()
 
-    if name == "Total Capital Spend":
-        f = open(directory + filename + ".txt", "w")
-    else:
-        f = open(directory + "legend/" + filename + ".txt", "w")
-    f.write("WARD NO. \tAMOUNT (Rands)\r\n")
-    for ward, total in sorted_breakdown:
-        f.write(str(ward) + "\t" + add_commas(total) + "\r\n")
+    f = open("plots/legend_" + filename + ".txt", "w")
+    heading_str = ""
+    for heading in headings:
+        heading_str += "\t" + heading
+    heading_str = heading_str[1::] + "\r\n"
+    f.write(heading_str)
+    for index, amount in sorted_values:
+        f.write(index + "\t" + add_commas(amount) + "\r\n")
     f.close()
 
 
@@ -109,17 +107,18 @@ def read_input(filename, index_column, category_columns, target_column, delimete
     Read an input textfile and categorize the content. The first line is assumed to be column headings.
     """
 
-    data = list(csv.reader(open(filename, 'rU'), delimiter=delimeter))
-    headings = data[0]
-    data = data[1::]
-    head = [headings[index_column], ]
+    data_in = list(csv.reader(open(filename, 'rU'), delimiter=delimeter))
+    headings_in = data_in[0]
+    data_in = data_in[1::]
+    headings_out = [headings_in[index_column], ]
     for col in category_columns:
-        head.append(headings[col])
-    head.append(headings[target_column])
-    print "Reading input data file, columns: " + str(head)
+        headings_out.append(headings_in[col])
+    headings_out.append(headings_in[target_column])
+    print "\nReading input data file:"
+    print "Columns: " + str(headings_out)
 
     data_out = []
-    for row in data:
+    for row in data_in:
         tmp = [row[index_column], ]
         for col in category_columns:
             tmp.append(row[col])
@@ -128,7 +127,7 @@ def read_input(filename, index_column, category_columns, target_column, delimete
     data_out = sorted(data_out, key=operator.itemgetter(1))
     print str(len(data_out)) + " records read"
     #data_out = [head] + data_out
-    return data_out
+    return headings_out, data_out
 
 
 def categorize(data_list, category_col=None):
@@ -165,19 +164,25 @@ def assemble_plot_data(data_list):
 
     """
 
+    print "\nExtracting relevant data for plotting."
     # extract the data relevant to each plot
     total_overall, values_overall = categorize(data_list)  # amounts, grouped by index item
+    num_data_sets = 1
     breakdown = []  # list of dicts
 
     num_categories = len(data_list[0]) - 2
     for i in range(num_categories):
-        breakdown.append(categorize(data_list, i+1))
+        data_set_list = categorize(data_list, i+1)
+        breakdown.append(data_set_list)
+        num_data_sets += len(data_set_list)
+
+    print str(num_data_sets) + " data sets ready for plotting."
     return total_overall, values_overall, breakdown
 
 
 def read_shape_file(path):
 
-    print "Reading shapefile records."
+    print "\nReading shapefile records."
     sf = shapefile.Reader(path)
 
     # extract list of record objects
@@ -191,6 +196,17 @@ def read_shape_file(path):
     return records
 
 
+def generate_plot(sf_records, sf_index, values, headings, colormap, bias, prefix, filename, extension):
+
+    # map data to colors
+    colors, total_mapped = map_colors(sf_records, sf_index, values, colormap, bias)
+
+    # plot colors and shape records
+    plot_map(sf_records, values, colors, headings, prefix, filename, extension)
+
+    return
+
+
 if __name__ == "__main__":
 
     # Read input data, specifying the index column, which is used for matching to the shapefile,
@@ -198,70 +214,42 @@ if __name__ == "__main__":
     # be specified for breaking down the data set into categories.
 
     categories = [1, 3]  # directorate and department columns
-    data = read_input('city_budget.txt', -2, categories, -4)
+    headings, data = read_input('city_budget.txt', -2, categories, -4)
 
     # Process input data, grouping it by some target column, and optionally categorizing it by another.
     total_overall, values_overall, breakdown = assemble_plot_data(data)
-    print total_overall
-    print values_overall
-    print len(breakdown)
-    print len(breakdown[0])
-    print len(breakdown[1])
+    print "Overall total: " + add_commas(total_overall)
 
     # Read shapefile
-    records = read_shape_file("./shapefiles_cape_town/wards.shp")
+    sf_records = read_shape_file("./shapefiles_cape_town/wards.shp")
+    sf_index = 3  # the column that is used for joining to the input data set
 
-    print records[55].record
-    print records[0].record[3]
+    print sf_records[55].record
+    print sf_records[0].record[sf_index]
 
-    # Process colors.
-    available_colormaps = [
+    # Project values onto a color map.
+    # For all available colormaps, see http://matplotlib.org/examples/color/colormaps_reference.html
+    colormaps = [
         'binary',
         'Blues',
-        'BuGn',
-        'BuPu',
-        'gist_yarg',
-        'GnBu',
         'Greens',
-        'Greys',
         'Oranges',
         'OrRd',
-        'PuBu',
-        'PuBuGn',
-        'PuRd',
-        'Purples',
-        'RdPu',
         'Reds',
-        'YlGn',
-        'YlGnBu',
-        'YlOrBr',
-        'YlOrRd'
     ]
 
-    colors_overall, total_mapped = map_colors(records, 3, values_overall, 'Blues', 0.25)
+    # Plot summary map.
+    tmp_head = [headings[0], headings[-1]]
+    generate_plot(sf_records, sf_index, values_overall, tmp_head, colormaps[1], 0.0, '0', 'Total', 'png')
 
-    # print a sorted list of totals for this map
-    sorted_breakdown = sorted(values_overall.iteritems(), key=operator.itemgetter(1))
-    sorted_breakdown.reverse()
-    print values_overall
-    print sorted_breakdown
-
-    #colors_cat = {}
-    #for category, values in values_cat.iteritems():
-    #    tmp_colors, tmp_total, tmp_sorted_breakdown = map_colors(records, values)
-    #    colors_cat[category] = (tmp_colors, tmp_total, tmp_sorted_breakdown)
-
-
-    # Plot map.
-    plot_map(records, colors_overall, "plots/", 'Total Capital Spend', '.png', 0, sorted_breakdown)
-    #plot_map(records, colors_tot, "plots/", 'Total Capital Spend', '.svg', 0, sorted_breakdown)
-    #
-    #i = 1
-    #for category, vals in colors_cat.iteritems():
-    #    tmp_colors, tmp_total, tmp_sorted_breakdown = vals
-    #    if tmp_total > 0.0:
-    #        plot_map(records, tmp_colors, config[0], category, '.png', i, tmp_sorted_breakdown)
-    #        plot_map(records, tmp_colors, config[0], category, '.svg', i, tmp_sorted_breakdown)
-    #    i += 1
-
-    # Save legend.
+    # Plot breakdown maps.
+    for i in range(len(breakdown)):
+        data_set_list = breakdown[i]
+        num_digits = len(str(len(data_set_list)))  # used in prefixes for file names
+        for j in range(len(data_set_list)):
+            category_name, tmp_subtotal, tmp_values = data_set_list[j]
+            print tmp_values
+            tmp = "{0:0" + str(num_digits) + "d}"
+            prefix = tmp.format(j+1)
+            prefix = str(i+1) + prefix
+            generate_plot(sf_records, sf_index, tmp_values, tmp_head, colormaps[1], 0.0, prefix, category_name, 'png')
