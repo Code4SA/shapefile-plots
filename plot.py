@@ -23,49 +23,44 @@ def add_commas(float_in):
     return str_out
 
 
-def get_colors(records, values):
+def map_colors(records, sf_index, values, colormap="Blues", bias=0.0, debug=False):
 
-    colormap = plt.get_cmap('Blues')
+    colormap = plt.get_cmap(colormap)
     color_list = []
 
     for record in records:
-        ward = str(record.record[3])
+        rec_index = str(record.record[sf_index])
         try:
-            amount = values[ward]
-            print ward + "\t" + add_commas(amount)
+            amount = values[rec_index]
+            if debug:
+                print rec_index + "\t" + add_commas(amount)
             color_list.append(amount)
         except KeyError:
-            print "empty ward: " + ward
+            if debug:
+                print rec_index + "\t0"
             color_list.append(0.0)
 
     color_arr = array(color_list)
-    total = sum(color_arr)
+    total_mapped = sum(color_arr)
+
     # normalize, but bias the starting point
     max_val = max(color_arr)
-    tmp = color_arr/(max_val * 1.25) + (1 - 1.0/1.25)
-
-    # keep zero-valued entries white
-    for i in range(len(color_arr)):
-        if not color_arr[i]:
-            tmp[i] = 0.0
+    tmp = color_arr/(max_val * (1.0 + bias)) + (1 - 1.0/(1.0 + bias))
     color_arr = tmp
 
-    print "MAX: " + str(max_val)
-    print "Total (check): " + str(total)
-
-    # print a sorted list of totals for each ward
-    sorted_breakdown = sorted(values.iteritems(), key=operator.itemgetter(1))
-    sorted_breakdown.reverse()
+    if debug:
+        print "\nMAX: " + str(max_val)
+        print "Total (check): " + str(total_mapped) + "\n"
 
     colors = colormap(color_arr)
-    return colors, total, sorted_breakdown
+    return colors, total_mapped
 
 
 def plot_map(records, colors, directory, name, extension, counter, sorted_breakdown):
 
     fig = plt.figure(figsize=(8, 8.5), dpi=100)
     ax = fig.add_subplot(1, 1, 1)
-    for i in range(num_recs):
+    for i in range(len(records)):
         patches = []
         points = array(records[i].shape.points)
         parts = records[i].shape.parts
@@ -180,14 +175,32 @@ def assemble_plot_data(data_list):
     return total_overall, values_overall, breakdown
 
 
+def read_shape_file(path):
+
+    print "Reading shapefile records."
+    sf = shapefile.Reader(path)
+
+    # extract list of record objects
+    records = sf.shapeRecords()
+    print str(len(records)) + " records in shapefile."
+    print "The following fields are available from the shapefile:"
+    print sf.fields
+    for i in range(len(sf.fields)):
+        if not i == 0:
+            print str(i) + "\t" + sf.fields[i][0] + ", e.g. " + str(records[0].record[i - 1])
+    return records
+
+
 if __name__ == "__main__":
 
-    categories = [1, 3]  # directorate and department
+    # Read input data, specifying the index column, which is used for matching to the shapefile,
+    # as well as the target column with the values to be plotted. Further columns can optionally
+    # be specified for breaking down the data set into categories.
 
-    # read input csv
+    categories = [1, 3]  # directorate and department columns
     data = read_input('city_budget.txt', -2, categories, -4)
 
-    # categorize the data
+    # Process input data, grouping it by some target column, and optionally categorizing it by another.
     total_overall, values_overall, breakdown = assemble_plot_data(data)
     print total_overall
     print values_overall
@@ -195,30 +208,52 @@ if __name__ == "__main__":
     print len(breakdown[0])
     print len(breakdown[1])
 
+    # Read shapefile
+    records = read_shape_file("./shapefiles_cape_town/wards.shp")
 
-    ## read input shapefile
-    #print "\n------------ READING SHAPEFILE --------------"
-    #sf = shapefile.Reader("./shapefiles_cape_town/wards.shp")
-    #
-    ## extract list of record objects
-    #records = sf.shapeRecords()
-    #num_recs = len(records)
-    #print "Number of records: ", str(num_recs)
-    #print sf.fields
-    #print records[55].record
-    #print records[0].record[3]
-    #
-    #
-    #print "\n------------ CALCULATING COLORS --------------"
-    #colors_tot, total, sorted_breakdown = get_colors(records, values_tot)
+    print records[55].record
+    print records[0].record[3]
+
+    # Process colors.
+    available_colormaps = [
+        'binary',
+        'Blues',
+        'BuGn',
+        'BuPu',
+        'gist_yarg',
+        'GnBu',
+        'Greens',
+        'Greys',
+        'Oranges',
+        'OrRd',
+        'PuBu',
+        'PuBuGn',
+        'PuRd',
+        'Purples',
+        'RdPu',
+        'Reds',
+        'YlGn',
+        'YlGnBu',
+        'YlOrBr',
+        'YlOrRd'
+    ]
+
+    colors_overall, total_mapped = map_colors(records, 3, values_overall, 'Blues', 0.25)
+
+    # print a sorted list of totals for this map
+    sorted_breakdown = sorted(values_overall.iteritems(), key=operator.itemgetter(1))
+    sorted_breakdown.reverse()
+    print values_overall
+    print sorted_breakdown
+
     #colors_cat = {}
     #for category, values in values_cat.iteritems():
-    #    tmp_colors, tmp_total, tmp_sorted_breakdown = get_colors(records, values)
+    #    tmp_colors, tmp_total, tmp_sorted_breakdown = map_colors(records, values)
     #    colors_cat[category] = (tmp_colors, tmp_total, tmp_sorted_breakdown)
-    #
-    #
-    #print "\n------------ PLOTTING MAP --------------"
-    #plot_map(records, colors_tot, "plots/", 'Total Capital Spend', '.png', 0, sorted_breakdown)
+
+
+    # Plot map.
+    plot_map(records, colors_overall, "plots/", 'Total Capital Spend', '.png', 0, sorted_breakdown)
     #plot_map(records, colors_tot, "plots/", 'Total Capital Spend', '.svg', 0, sorted_breakdown)
     #
     #i = 1
@@ -228,3 +263,5 @@ if __name__ == "__main__":
     #        plot_map(records, tmp_colors, config[0], category, '.png', i, tmp_sorted_breakdown)
     #        plot_map(records, tmp_colors, config[0], category, '.svg', i, tmp_sorted_breakdown)
     #    i += 1
+
+    # Save legend.

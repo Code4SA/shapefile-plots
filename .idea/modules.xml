@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/wc-budget.iml" filepath="$PROJECT_DIR$/.idea/wc-budget.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/cpt-budget.iml" filepath="$PROJECT_DIR$/.idea/cpt-budget.iml" />
     </modules>
   </component>
 </project>
